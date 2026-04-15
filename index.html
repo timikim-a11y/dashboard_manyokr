@@ -230,6 +230,8 @@ const CC={oliveyoung:{m:'#8dd841',b:'b-ol'},naver:{m:'#1ec965',b:'b-nv'},officia
 const C={month:0,media:1,cat:2,period:3,target:4,product:5,reach:6,imp:7,click:8,adcost:12,cart:14,cartVal:15,purchase:16,purchaseVal:17,result:18,salesT:19,salesU:20};
 // salesT = T열(index 19): 올리브영=SELL-IN 매출, 나머지=매출
 // salesU = U열(index 20): 올리브영=SELL-OUT 매출 (나머지는 없음)
+// 상품_raw: S열(18)=채널(온라인/오프라인), T열(19)=판매금액, U열(20)=판매건수, V열(21)=판매수량
+const CP={channel:18,salesAmt:19,salesCnt:20,salesQty:21};
 
 const GRAPH_METRICS=[
   {k:'sellIn',l:'매출(SELL-IN)',color:'#4d8cf5',type:'bar'},
@@ -693,30 +695,32 @@ function renderCh(key){
       <div class="kpi"><div class="kpi-l">매출</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.sellIn)}</div></div>
     </div>`;
     
-    // ── 2줄: 상품 매출 (올리브영 + 상품 필터 시만) ──
+    // ── 2줄: 상품 매출 (올리브영 전용, CAT 필터 시 표시) ──
     if(isOlive){
       const row2Wrap=$(`${key}-kpi-row2-wrap`);
-      const hasProductFilter=pr!=='all';
-      if(hasProductFilter&&pR.length>0){
+      const hasCatFilter=cat!=='all';
+      if(hasCatFilter&&pR.length>0){
         row2Wrap.style.display='block';
-        // 상품RAW에서 필터된 데이터
+        // 상품RAW: 기간+CAT 필터, 제품 필터 추가 적용
         let prodFiltered=fym(pR,year,month);
-        prodFiltered=fcat(prodFiltered,cat);prodFiltered=fprod(prodFiltered,pr);
-        const pm=calcM(prodFiltered);
-        // 전체 상품 매출(E열=target), 온라인/오프라인은 매체명(B열)으로 구분
-        const onlineRows=prodFiltered.filter(r=>{const m=String(r[C.media]||'').toLowerCase();return m.includes('온라인')||m.includes('online')});
-        const offlineRows=prodFiltered.filter(r=>{const m=String(r[C.media]||'').toLowerCase();return m.includes('오프라인')||m.includes('offline')});
-        const totalProdSales=pm.reach+pm.imp+pm.click+pn(pm.adcost)+pn(pm.sellIn); // 상품 매출은 구조에 따라 조정
-        // 상품RAW도 동일 구조이므로 T열(salesT)에서 매출 가져옴
+        prodFiltered=fcat(prodFiltered,cat);
+        if(pr!=='all')prodFiltered=fprod(prodFiltered,pr);
+        
+        // S열(18)=채널(온라인/오프라인), T열(19)=판매금액, U열(20)=판매건수, V열(21)=판매수량
+        const onlineRows=prodFiltered.filter(r=>{const ch=String(r[CP.channel]||'').trim();return ch.includes('온라인')||ch.toLowerCase().includes('online')});
+        const offlineRows=prodFiltered.filter(r=>{const ch=String(r[CP.channel]||'').trim();return ch.includes('오프라인')||ch.toLowerCase().includes('offline')});
+        
         let totalPS=0,onlinePS=0,offlinePS=0;
-        prodFiltered.forEach(r=>totalPS+=pn(r[C.salesT])||pn(r[C.target])||0);
-        onlineRows.forEach(r=>onlinePS+=pn(r[C.salesT])||pn(r[C.target])||0);
-        offlineRows.forEach(r=>offlinePS+=pn(r[C.salesT])||pn(r[C.target])||0);
+        let totalCnt=0,onlineCnt=0,offlineCnt=0;
+        let totalQty=0,onlineQty=0,offlineQty=0;
+        prodFiltered.forEach(r=>{totalPS+=pn(r[CP.salesAmt]);totalCnt+=pn(r[CP.salesCnt]);totalQty+=pn(r[CP.salesQty])});
+        onlineRows.forEach(r=>{onlinePS+=pn(r[CP.salesAmt]);onlineCnt+=pn(r[CP.salesCnt]);onlineQty+=pn(r[CP.salesQty])});
+        offlineRows.forEach(r=>{offlinePS+=pn(r[CP.salesAmt]);offlineCnt+=pn(r[CP.salesCnt]);offlineQty+=pn(r[CP.salesQty])});
         
         $(`${key}-kpi-row2`).innerHTML=`<div class="g3">
-          <div class="kpi"><div class="kpi-l">전체 상품 매출</div><div class="kpi-v" style="color:#1a2d5a">${fw(totalPS)}</div></div>
-          <div class="kpi"><div class="kpi-l">온라인 상품 매출</div><div class="kpi-v" style="color:var(--blue)">${fw(onlinePS)}</div></div>
-          <div class="kpi"><div class="kpi-l">오프라인 상품 매출</div><div class="kpi-v" style="color:var(--official)">${fw(offlinePS)}</div></div>
+          <div class="kpi"><div class="kpi-l">전체 상품 매출</div><div class="kpi-v" style="color:#1a2d5a">${fw(totalPS)}</div><div style="font-size:10px;color:var(--text-3);margin-top:2px">건수 ${fn(totalCnt)} · 수량 ${fn(totalQty)}</div></div>
+          <div class="kpi"><div class="kpi-l">온라인 상품 매출</div><div class="kpi-v" style="color:var(--blue)">${fw(onlinePS)}</div><div style="font-size:10px;color:var(--text-3);margin-top:2px">건수 ${fn(onlineCnt)} · 수량 ${fn(onlineQty)}</div></div>
+          <div class="kpi"><div class="kpi-l">오프라인 상품 매출</div><div class="kpi-v" style="color:var(--official)">${fw(offlinePS)}</div><div style="font-size:10px;color:var(--text-3);margin-top:2px">건수 ${fn(offlineCnt)} · 수량 ${fn(offlineQty)}</div></div>
         </div>`;
       }else{
         row2Wrap.style.display='none';
