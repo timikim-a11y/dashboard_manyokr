@@ -230,8 +230,8 @@ const CC={oliveyoung:{m:'#8dd841',b:'b-ol'},naver:{m:'#1ec965',b:'b-nv'},officia
 const C={month:0,media:1,cat:2,period:3,target:4,product:5,reach:6,imp:7,click:8,adcost:12,cart:14,cartVal:15,purchase:16,purchaseVal:17,result:18,salesT:19,salesU:20};
 // salesT = T열(index 19): 올리브영=SELL-IN 매출, 나머지=매출
 // salesU = U열(index 20): 올리브영=SELL-OUT 매출 (나머지는 없음)
-// 상품_raw: S열(18)=채널(온라인/오프라인), T열(19)=판매금액, U열(20)=판매건수, V열(21)=판매수량
-const CP={channel:18,salesAmt:19,salesCnt:20,salesQty:21};
+// 상품_raw: T열(19)=채널(온라인/오프라인), U열(20)=판매금액, V열(21)=판매건수, W열(22)=판매수량
+const CP={channel:19,salesAmt:20,salesCnt:21,salesQty:22};
 
 const GRAPH_METRICS=[
   {k:'sellIn',l:'매출(SELL-IN)',color:'#4d8cf5',type:'bar'},
