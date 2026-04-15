@@ -211,17 +211,13 @@ tbody tr.change-rate td:first-child{color:var(--official)}
 const CHS=['oliveyoung','naver','official','etc'];
 const CN={oliveyoung:'올리브영',naver:'네이버',official:'공식몰',etc:'기타채널'};
 const CC={oliveyoung:{m:'#8dd841',b:'b-ol'},naver:{m:'#1ec965',b:'b-nv'},official:{m:'#7c6cf6',b:'b-of'},etc:{m:'#e6a620',b:'b-et'}};
-const C={month:0,media:1,cat:2,period:3,target:4,product:5,reach:6,imp:7,click:8,adcost:12,cart:14,cartVal:15,purchase:16,purchaseVal:17,result:18,salesT:19,salesU:20};
-// salesT = T열(index 19): 올리브영=SELL-IN 매출, 나머지=매출
-// salesU = U열(index 20): 올리브영=SELL-OUT 매출 (나머지는 없음)
-
+const C={month:0,media:1,cat:2,period:3,target:4,product:5,reach:6,imp:7,click:8,adcost:12,cart:14,cartVal:15,purchase:16,purchaseVal:17,result:18,cType:19,cName:20};
 const GRAPH_METRICS=[
-  {k:'sellIn',l:'매출(SELL-IN)',color:'#4d8cf5',type:'bar'},
-  {k:'sellOut',l:'매출(SELL-OUT)',color:'#60a5fa',type:'bar'},
+  {k:'salesRaw',l:'실매출',color:'#4d8cf5',type:'bar'},
   {k:'adcostV',l:'광고비',color:'#a855f7',type:'bar'},
   {k:'purchaseVal',l:'광고매출',color:'#1ec965',type:'bar'},
   {k:'roasP',l:'광고 ROAS',color:'#e6a620',type:'line',yAxis:'y1',pct:true},
-  {k:'adRatio',l:'매출대비 광고비 비중',color:'#f05252',type:'line',yAxis:'y1',pct:true}
+  {k:'adRatio',l:'실매출대비 광고비 비중',color:'#f05252',type:'line',yAxis:'y1',pct:true}
 ];
 
 let AD={},charts={},urls={};
@@ -232,10 +228,10 @@ let AD={},charts={},urls={};
 //   비워두면 기존처럼 설정 화면이 뜹니다.
 // ═══════════════════════════════════════════════════
 const DEFAULT_URLS = {
-  oliveyoung: 'https://script.google.com/macros/s/AKfycbwg6d-FPV6gtu3odutkCEHBd5RwGojhqkhMmZ9eqphXO-Z7NvsvnNK4KbBipdYKWj_M/exec',
-  naver: 'https://script.google.com/macros/s/AKfycbzgeqUXdce2VAyX3vstrFABMeoG20U19IkiYQ2vGthDYjROwBzemr4naSYMTaIdoWCZzA/exec',
-  official: 'https://script.google.com/macros/s/AKfycbzueNPwMCPYJX3R7_iKja3_vr-u26IRxqoQ05KRxOrMwfwEFQbMKFqM8JRTzwFkUEbRkg/exec',
-  etc: 'https://script.google.com/macros/s/AKfycbxPCxMQQj54SbUC4h8COTMrJ86bG2KeCH8ekgts1IJJdfoxb5xgd5uKvy6j-MbvByoi/exec'
+  oliveyoung: '',  // ← 올리브영 Apps Script 웹앱 URL 붙여넣기
+  naver: '',       // ← 네이버 Apps Script 웹앱 URL 붙여넣기
+  official: '',    // ← 공식몰 Apps Script 웹앱 URL 붙여넣기
+  etc: ''          // ← 기타채널 Apps Script 웹앱 URL 붙여넣기
 };
 
 // ═══════════════════════════════════════════════════
@@ -266,25 +262,19 @@ function pn(v){if(v==null||v==='')return 0;if(typeof v==='number')return v;const
 function pd(v){if(!v)return null;if(v instanceof Date)return isNaN(v)?null:v;const s=String(v).trim();let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);m=s.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})/);if(m)return new Date(+m[1],+m[2]-1,+m[3]);const d=new Date(s);return isNaN(d)?null:d}
 function ds(d){if(!d)return'';return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 
-// 전체 숫자 표기 (억/만 축약 금지, 원 단위 표기 안함)
+// 전체 숫자 표기 (억/만 축약 금지)
 function fn(n){if(n==null||isNaN(n))return'-';return Math.round(n).toLocaleString('ko-KR')}
-function fw(n){if(n==null||isNaN(n))return'-';return Math.round(n).toLocaleString('ko-KR')}
+function fw(n){if(n==null||isNaN(n))return'-';return Math.round(n).toLocaleString('ko-KR')+'원'}
 function fp(n){if(n==null||isNaN(n)||!isFinite(n))return'-';return(n*100).toFixed(2)+'%'}
 
-function calcM(rows, salesRows){
-  const m={reach:0,imp:0,click:0,adcost:0,cart:0,cartVal:0,purchase:0,purchaseVal:0,sellIn:0,sellOut:0};
+function calcM(rows){
+  const m={reach:0,imp:0,click:0,adcost:0,cart:0,cartVal:0,purchase:0,purchaseVal:0,salesRaw:0};
   rows.forEach(r=>{
     m.reach+=pn(r[C.reach]);m.imp+=pn(r[C.imp]);m.click+=pn(r[C.click]);m.adcost+=pn(r[C.adcost]);
     m.cart+=pn(r[C.cart]);m.cartVal+=pn(r[C.cartVal]);m.purchase+=pn(r[C.purchase]);m.purchaseVal+=pn(r[C.purchaseVal]);
+    // 실매출 = 목표(E열) or 제품별성과(F열) — use target column if available
+    m.salesRaw+=pn(r[C.target])||0;
   });
-  // 매출: 매출_raw 시트에서 T열(19)=SELL-IN/매출, U열(20)=SELL-OUT(올리브영만)
-  if(salesRows&&salesRows.length>0){
-    salesRows.forEach(r=>{
-      m.sellIn+=pn(r[C.salesT])||0;   // T열: SELL-IN 또는 매출
-      m.sellOut+=pn(r[C.salesU])||0;   // U열: SELL-OUT (올리브영만, 나머지는 0)
-    });
-  }
-  m.salesTotal=m.sellIn+m.sellOut; // 합산 매출 (광고비 비중 계산용)
   m.adcostV=m.adcost*1.1;
   m.ctr=m.imp>0?m.click/m.imp:0;
   m.cpc=m.click>0?m.adcostV/m.click:0;
@@ -297,7 +287,7 @@ function calcM(rows, salesRows){
   m.roasP=m.adcostV>0?m.purchaseVal/m.adcostV:0;
   m.avgC=m.cart>0?m.cartVal/m.cart:0;
   m.avgP=m.purchase>0?m.purchaseVal/m.purchase:0;
-  m.adRatio=m.sellIn>0?m.adcostV/m.sellIn:0; // SELL-IN 기준 광고비 비중
+  m.adRatio=m.salesRaw>0?m.adcostV/m.salesRaw:0;
   return m;
 }
 
@@ -323,20 +313,19 @@ function fym(rows,year,month){
 // FETCH
 // ═══════════════════════════════════════════════════
 async function fetchCh(k){
-  if(!urls[k])return{raw:[],goals:[],prod:[],sales:[]};
+  if(!urls[k])return{raw:[],goals:[],prod:[]};
   try{
     const r=await fetch(urls[k]);const j=await r.json();
-    const res={raw:[],goals:[],prod:[],sales:[]};
+    const res={raw:[],goals:[],prod:[]};
     Object.keys(j).forEach(sn=>{
       const rows=(j[sn].rows||[]).map(r=>{r._sheet=sn;r._ch=k;return r});
       const nl=sn.toLowerCase();
       if(nl.includes('목표'))res.goals.push(...rows);
       else if(nl.includes('상품'))res.prod.push(...rows);
-      else if(nl.includes('매출'))res.sales.push(...rows);
       else res.raw.push(...rows);
     });
     return res;
-  }catch(e){console.error(`Fetch ${k}:`,e);return{raw:[],goals:[],prod:[],sales:[]}}
+  }catch(e){console.error(`Fetch ${k}:`,e);return{raw:[],goals:[],prod:[]}}
 }
 
 // ═══════════════════════════════════════════════════
@@ -431,7 +420,7 @@ function renderYMBar(containerId,allRows,onChange){
 let toggleStates={};
 
 function renderMixedChart(chartId,toggleId,labels,dataByMetric,prefix){
-  if(!toggleStates[prefix])toggleStates[prefix]={sellIn:true,sellOut:true,adcostV:true,purchaseVal:true,roasP:true,adRatio:true};
+  if(!toggleStates[prefix])toggleStates[prefix]={salesRaw:true,adcostV:true,purchaseVal:true,roasP:true,adRatio:true};
   const st=toggleStates[prefix];
   
   // Toggles
@@ -485,7 +474,7 @@ function renderMixedChart(chartId,toggleId,labels,dataByMetric,prefix){
         tooltip:{callbacks:{label:c=>{
           const gm=GRAPH_METRICS.find(g=>g.l===c.dataset.label);
           if(gm?.pct)return`${c.dataset.label}: ${c.raw.toFixed(2)}%`;
-          return`${c.dataset.label}: ${Math.round(c.raw).toLocaleString('ko-KR')}`;
+          return`${c.dataset.label}: ${Math.round(c.raw).toLocaleString('ko-KR')}원`;
         }}}
       },
       scales:{
@@ -502,12 +491,8 @@ function renderMixedChart(chartId,toggleId,labels,dataByMetric,prefix){
 // ═══════════════════════════════════════════════════
 function renderSummary(){
   const ct=$('tab-summary');
-  let allR=[],allG=[],allSales=[];
-  CHS.forEach(k=>{if(AD[k]){
-    allR.push(...AD[k].raw.map(r=>({...r,_ch:k})));
-    allG.push(...AD[k].goals.map(r=>({...r,_ch:k})));
-    if(AD[k].sales)allSales.push(...AD[k].sales.map(r=>({...r,_ch:k})));
-  }});
+  let allR=[],allG=[];
+  CHS.forEach(k=>{if(AD[k]){allR.push(...AD[k].raw.map(r=>({...r,_ch:k})));allG.push(...AD[k].goals.map(r=>({...r,_ch:k})))}});
   if(!allR.length){ct.innerHTML='<div class="no-data">데이터가 없습니다.</div>';return}
   
   const media=uq(allR,C.media);
@@ -517,7 +502,7 @@ function renderSummary(){
     <div class="filters">
       <div class="f-group"><span class="f-label">매체</span><div class="f-row"><select id="s-me"><option value="all">전체 매체</option>${media.map(m=>`<option value="${m}">${m}</option>`).join('')}</select></div></div>
     </div>
-    <div class="g3" id="s-kpi" style="margin-bottom:14px"></div>
+    <div class="g5" id="s-kpi" style="margin-bottom:14px"></div>
     
     <div class="card">
       <div class="card-h">전체 채널 통합</div>
@@ -546,16 +531,14 @@ function renderSummary(){
   function update(year,month){
     const me=$('s-me').value;
     
-    // Filter all raw + sales
+    // Filter all raw
     let filtered=fym(allR,year,month);
     filtered=fmedia(filtered,me);
-    let filteredSales=fym(allSales,year,month);
-    const tm=calcM(filtered,filteredSales);
+    const tm=calcM(filtered);
     
     // KPI
     $('s-kpi').innerHTML=`
-      <div class="kpi"><div class="kpi-l">매출(SELL-IN)</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.sellIn)}</div></div>
-      <div class="kpi"><div class="kpi-l">매출(SELL-OUT)</div><div class="kpi-v" style="color:#60a5fa">${tm.sellOut?fw(tm.sellOut):'-'}</div></div>
+      <div class="kpi"><div class="kpi-l">실매출</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.salesRaw)}</div></div>
       <div class="kpi"><div class="kpi-l">광고비(VAT+)</div><div class="kpi-v" style="color:var(--official)">${fw(tm.adcostV)}</div></div>
       <div class="kpi"><div class="kpi-l">광고매출</div><div class="kpi-v" style="color:var(--naver)">${fw(tm.purchaseVal)}</div></div>
       <div class="kpi"><div class="kpi-l">ROAS(구매)</div><div class="kpi-v" style="color:${tm.roasP>=1?'var(--positive)':'var(--negative)'}">${fp(tm.roasP)}</div></div>
@@ -563,13 +546,12 @@ function renderSummary(){
     `;
     
     // --- ALL channels combined chart (by date) ---
-    renderChannelChart('all',filtered,'s-chart-all','s-tgl-all','s-tbl-all','sum-all',filteredSales);
+    renderChannelChart('all',filtered,'s-chart-all','s-tgl-all','s-tbl-all','sum-all');
     
     // --- Per channel ---
     CHS.forEach(k=>{
       let chRows=filtered.filter(r=>r._ch===k);
-      let chSales=filteredSales.filter(r=>r._ch===k);
-      renderChannelChart(k,chRows,`s-chart-${k}`,`s-tgl-${k}`,`s-tbl-${k}`,`sum-${k}`,chSales);
+      renderChannelChart(k,chRows,`s-chart-${k}`,`s-tgl-${k}`,`s-tbl-${k}`,`sum-${k}`);
     });
     
     // Targets
@@ -578,8 +560,7 @@ function renderSummary(){
     tCh.forEach(k=>{
       const gRows=fym(allG.filter(r=>r._ch===k),year,month);
       const aRows=filtered.filter(r=>r._ch===k);
-      const chSales=filteredSales.filter(r=>r._ch===k);
-      const gm=calcM(gRows),am=calcM(aRows,chSales);
+      const gm=calcM(gRows),am=calcM(aRows);
       const ar=(a,g)=>(!g||g===0)?'-':((a/g)*100).toFixed(1)+'%';
       const pw=(a,g)=>!g?'0':Math.min(100,(a/g)*100).toFixed(1);
       const pcl=(a,g)=>{if(!g)return'prog-g';const r=a/g;return r>=1?'prog-g':r>=0.7?'prog-y':'prog-r'};
@@ -595,33 +576,32 @@ function renderSummary(){
     });
     $('s-tgt').innerHTML=tH;
     
-    // 채널별 매출 목표 / 달성 현황 (매출_raw T/U열 활용)
+    // 채널별 매출 목표 / 달성 현황 (목표_raw의 매출 관련 데이터 활용)
     let stH='';
     tCh.forEach(k=>{
       const gRows=fym(allG.filter(r=>r._ch===k),year,month);
-      const chSales=filteredSales.filter(r=>r._ch===k);
       const aRows=filtered.filter(r=>r._ch===k);
-      // 목표_raw에서 매출 목표
-      let salesGoal=0,adSalesGoal=0;
+      // 목표_raw에서 매출 목표: E열(target)=매출목표, F열(product)=매출실적으로 활용
+      // 광고 성과 데이터에서: purchaseVal=광고매출, salesRaw=실매출
+      let salesGoal=0,salesActual=0,adSalesGoal=0,adSalesActual=0;
       gRows.forEach(r=>{
-        salesGoal+=pn(r[C.target])||0;
-        adSalesGoal+=pn(r[C.purchaseVal])||0;
+        salesGoal+=pn(r[C.target])||0;       // 매출 목표
+        adSalesGoal+=pn(r[C.purchaseVal])||0; // 광고매출 목표
       });
-      const am=calcM(aRows,chSales);
+      const am=calcM(aRows);
+      salesActual=am.salesRaw;               // 실매출 달성
+      adSalesActual=am.purchaseVal;          // 광고매출 달성
       
       const ar2=(a,g)=>(!g||g===0)?'-':((a/g)*100).toFixed(1)+'%';
       const pw2=(a,g)=>!g?'0':Math.min(100,(a/g)*100).toFixed(1);
       const pcl2=(a,g)=>{if(!g)return'prog-g';const r=a/g;return r>=1?'prog-g':r>=0.7?'prog-y':'prog-r'};
       const acl2=(a,g)=>{const v=parseFloat(ar2(a,g));if(isNaN(v))return'var(--text-3)';return v>=100?'var(--positive)':v>=70?'var(--warn)':'var(--negative)'};
       
-      // 올리브영은 SELL-IN/SELL-OUT 분리, 나머지는 매출(SELL-IN)만
-      const salesMetrics=k==='oliveyoung'?[
-        ['매출(SELL-IN)',salesGoal,am.sellIn,1],
-        ['매출(SELL-OUT)',0,am.sellOut,1],
-        ['광고매출 목표',adSalesGoal,am.purchaseVal,1],
-      ]:[
-        ['매출',salesGoal,am.sellIn,1],
-        ['광고매출 목표',adSalesGoal,am.purchaseVal,1],
+      const salesMetrics=[
+        ['매출 목표',salesGoal,salesActual,1],
+        ['광고매출 목표',adSalesGoal,adSalesActual,1],
+        ['장바구니 전환값',calcM(gRows).cartVal,am.cartVal,1],
+        ['구매 전환값',calcM(gRows).purchaseVal,am.purchaseVal,1],
       ];
       
       stH+=`<div class="card"><div class="card-h"><span class="badge ${CC[k].b}">${CN[k]}</span> 매출 현황</div>
@@ -639,13 +619,10 @@ function renderSummary(){
   $('s-me').addEventListener('change',()=>{const s=ymCtrl.getSelection();update(s.year,s.month)});
 }
 
-function renderChannelChart(key,rows,canvasId,toggleId,tblId,prefix,salesRows){
+function renderChannelChart(key,rows,canvasId,toggleId,tblId,prefix){
   // Group by date
   const byDate={};
   rows.forEach(r=>{const d=pd(r[C.period]);const dk=d?ds(d):'?';if(!byDate[dk])byDate[dk]=[];byDate[dk].push(r)});
-  // Group sales by date too
-  const salesByDate={};
-  if(salesRows)salesRows.forEach(r=>{const d=pd(r[C.period]);const dk=d?ds(d):'?';if(!salesByDate[dk])salesByDate[dk]=[];salesByDate[dk].push(r)});
   const dks=Object.keys(byDate).sort();
   
   const labels=dks;
@@ -653,15 +630,15 @@ function renderChannelChart(key,rows,canvasId,toggleId,tblId,prefix,salesRows){
   GRAPH_METRICS.forEach(gm=>dataByMetric[gm.k]=[]);
   
   dks.forEach(dk=>{
-    const m=calcM(byDate[dk],salesByDate[dk]);
+    const m=calcM(byDate[dk]);
     GRAPH_METRICS.forEach(gm=>dataByMetric[gm.k].push(m[gm.k]));
   });
   
   renderMixedChart(canvasId,toggleId,labels,dataByMetric,prefix);
   
   // Table data
-  const tRows=dks.map(dk=>({date:dk,...calcM(byDate[dk],salesByDate[dk])}));
-  const tot=calcM(rows,salesRows);
+  const tRows=dks.map(dk=>({date:dk,...calcM(byDate[dk])}));
+  const tot=calcM(rows);
   if(tRows.length>0){
     setTimeout(()=>buildTbl([{date:'합계',...tot},...tRows],tblId),0);
   }else{
@@ -675,7 +652,7 @@ function renderChannelChart(key,rows,canvasId,toggleId,tblId,prefix,salesRows){
 function renderCh(key){
   const ct=$('tab-'+key),data=AD[key];
   if(!data||!data.raw.length){ct.innerHTML='<div class="no-data">데이터 없음. URL과 _raw 시트를 확인하세요.</div>';return}
-  const allR=data.raw,pR=data.prod||[],sR=data.sales||[];
+  const allR=data.raw,pR=data.prod||[];
   const cats=uq([...allR,...pR],C.cat),prods=uq([...allR,...pR],C.product);
   
   ct.innerHTML=`
@@ -685,7 +662,7 @@ function renderCh(key){
       <div class="f-group"><span class="f-label">제품</span><div class="f-row"><select id="${key}-pr"><option value="all">전체</option>${prods.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div></div>
     </div>
     
-    <div class="g3" id="${key}-kpi" style="margin-bottom:14px"></div>
+    <div class="g5" id="${key}-kpi" style="margin-bottom:14px"></div>
     
     <div class="card">
       <div class="card-h">전체 합산</div>
@@ -696,8 +673,7 @@ function renderCh(key){
     </div>
     
     <div class="section-t">매체별 상세</div>
-    <div id="${key}-media-btns" class="ym-bar" style="margin-bottom:12px"></div>
-    <div id="${key}-media-content"></div>
+    <div id="${key}-media"></div>
   `;
   
   $(`${key}-cat`).addEventListener('change',()=>{
@@ -707,77 +683,45 @@ function renderCh(key){
     const s=ymCtrl.getSelection();updCh(s.year,s.month);
   });
   
-  let selectedMedia=null; // track selected media per channel
-  
   function updCh(year,month){
     const cat=$(`${key}-cat`).value,pr=$(`${key}-pr`).value;
     let f=fym(allR,year,month);f=fcat(f,cat);f=fprod(f,pr);
-    let fs=fym(sR,year,month);
-    const tm=calcM(f,fs);
+    const tm=calcM(f);
     
     $(`${key}-kpi`).innerHTML=`
-      <div class="kpi"><div class="kpi-l">매출(SELL-IN)</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.sellIn)}</div></div>
-      <div class="kpi"><div class="kpi-l">매출(SELL-OUT)</div><div class="kpi-v" style="color:#60a5fa">${tm.sellOut?fw(tm.sellOut):'-'}</div></div>
+      <div class="kpi"><div class="kpi-l">실매출</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.salesRaw)}</div></div>
       <div class="kpi"><div class="kpi-l">광고비(VAT+)</div><div class="kpi-v" style="color:var(--official)">${fw(tm.adcostV)}</div></div>
       <div class="kpi"><div class="kpi-l">광고매출</div><div class="kpi-v" style="color:var(--naver)">${fw(tm.purchaseVal)}</div></div>
       <div class="kpi"><div class="kpi-l">ROAS</div><div class="kpi-v" style="color:${tm.roasP>=1?'var(--positive)':'var(--negative)'}">${fp(tm.roasP)}</div></div>
       <div class="kpi"><div class="kpi-l">광고비 비중</div><div class="kpi-v" style="color:var(--warn)">${fp(tm.adRatio)}</div></div>
     `;
     
-    renderChannelChart(`${key}-total`,f,`${key}-chart-total`,`${key}-tgl-total`,`${key}-tbl-total`,`ch-${key}-total`,fs);
+    renderChannelChart(`${key}-total`,f,`${key}-chart-total`,`${key}-tgl-total`,`${key}-tbl-total`,`ch-${key}-total`);
     
-    // By media — button selector
+    // By media
     const mg={};f.forEach(r=>{const m=String(r[C.media]||'기타').trim();if(!mg[m])mg[m]=[];mg[m].push(r)});
-    const mediaList=Object.keys(mg).sort();
-    
-    // If previously selected media doesn't exist in current filter, reset
-    if(selectedMedia&&!mediaList.includes(selectedMedia))selectedMedia=null;
-    // Default to first media if none selected
-    if(!selectedMedia&&mediaList.length>0)selectedMedia=mediaList[0];
-    
-    // Render media buttons
-    let btnH='<span class="ym-label">매체</span>';
-    mediaList.forEach(media=>{
-      btnH+=`<div class="ym-btn ${media===selectedMedia?'active':''}" data-media="${media}">${media}</div>`;
+    let mH='';
+    Object.keys(mg).sort().forEach(media=>{
+      const cid=`${key}-m-${media.replace(/[^a-zA-Z0-9가-힣]/g,'')}`;
+      mH+=`<div class="card" style="margin-bottom:12px">
+        <div class="card-h">${media}</div>
+        <div id="${cid}-tgl"></div>
+        <div style="height:260px"><canvas id="${cid}-chart"></canvas></div>
+        <button class="tgl-btn" onclick="this.nextElementSibling.classList.toggle('open')">📊 상세 테이블 ▾</button>
+        <div class="tgl-body" id="${cid}-tbl"></div>
+      </div>`;
     });
-    $(`${key}-media-btns`).innerHTML=btnH;
+    $(`${key}-media`).innerHTML=mH||'<div class="no-data">데이터 없음</div>';
     
-    // Button click handlers
-    $(`${key}-media-btns`).querySelectorAll('[data-media]').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        selectedMedia=btn.dataset.media;
-        // Update button active state
-        $(`${key}-media-btns`).querySelectorAll('[data-media]').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        // Render selected media content
-        renderMediaContent(key,mg,selectedMedia);
-      });
+    // Render each media chart
+    Object.keys(mg).sort().forEach(media=>{
+      const cid=`${key}-m-${media.replace(/[^a-zA-Z0-9가-힣]/g,'')}`;
+      renderChannelChart(cid,mg[media],`${cid}-chart`,`${cid}-tgl`,`${cid}-tbl`,`ch-${key}-${cid}`);
     });
-    
-    // Render selected media
-    if(selectedMedia&&mg[selectedMedia]){
-      renderMediaContent(key,mg,selectedMedia);
-    }else{
-      $(`${key}-media-content`).innerHTML='<div class="no-data">매체를 선택하세요</div>';
-    }
   }
   
   const ymCtrl=renderYMBar(`${key}-ym`,allR,updCh);
   [$(`${key}-cat`),$(`${key}-pr`)].forEach(el=>el?.addEventListener('change',()=>{const s=ymCtrl.getSelection();updCh(s.year,s.month)}));
-}
-
-function renderMediaContent(key,mg,mediaName){
-  const rows=mg[mediaName]||[];
-  const cid=`${key}-media-sel`;
-  const ct=$(`${key}-media-content`);
-  ct.innerHTML=`<div class="card">
-    <div class="card-h">${mediaName}</div>
-    <div id="${cid}-tgl"></div>
-    <div style="height:280px"><canvas id="${cid}-chart"></canvas></div>
-    <button class="tgl-btn" onclick="this.nextElementSibling.classList.toggle('open')">📊 상세 테이블 ▾</button>
-    <div class="tgl-body" id="${cid}-tbl"></div>
-  </div>`;
-  renderChannelChart(cid,rows,`${cid}-chart`,`${cid}-tgl`,`${cid}-tbl`,`ch-${key}-${mediaName}`);
 }
 
 // ═══════════════════════════════════════════════════
@@ -871,10 +815,10 @@ function renderCompare(){
     // Bar chart comparison
     dc('cmp-chart');
     const ctx=$('cmp-chart')?.getContext('2d');if(!ctx)return;
-    const lbl=['노출','클릭','광고비(VAT+)','장바구니','구매','구매전환값','매출(SELL-IN)','매출(SELL-OUT)'];
+    const lbl=['노출','클릭','광고비(VAT+)','장바구니','구매','구매전환값','실매출'];
     charts['cmp-chart']=new Chart(ctx,{type:'bar',data:{labels:lbl,datasets:[
-      {label:`기간 A`,data:[m1.imp,m1.click,m1.adcostV,m1.cart,m1.purchase,m1.purchaseVal,m1.sellIn,m1.sellOut],backgroundColor:'rgba(141,216,65,0.55)',borderRadius:3},
-      {label:`기간 B`,data:[m2.imp,m2.click,m2.adcostV,m2.cart,m2.purchase,m2.purchaseVal,m2.sellIn,m2.sellOut],backgroundColor:'rgba(124,108,246,0.55)',borderRadius:3}
+      {label:`기간 A`,data:[m1.imp,m1.click,m1.adcostV,m1.cart,m1.purchase,m1.purchaseVal,m1.salesRaw],backgroundColor:'rgba(141,216,65,0.55)',borderRadius:3},
+      {label:`기간 B`,data:[m2.imp,m2.click,m2.adcostV,m2.cart,m2.purchase,m2.purchaseVal,m2.salesRaw],backgroundColor:'rgba(124,108,246,0.55)',borderRadius:3}
     ]},options:{responsive:true,maintainAspectRatio:false,plugins:{
       legend:{position:'bottom',labels:{color:'#7a809a',font:{size:10,family:'Noto Sans KR'}}},
       tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${Math.round(c.raw).toLocaleString('ko-KR')}`}}
