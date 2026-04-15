@@ -636,6 +636,7 @@ function renderCh(key){
   if(!data||!data.raw.length){ct.innerHTML='<div class="no-data">데이터 없음. URL과 _raw 시트를 확인하세요.</div>';return}
   const allR=data.raw,pR=data.prod||[],sR=data.sales||[];
   const cats=uq([...allR,...pR],C.cat),prods=uq([...allR,...pR],C.product);
+  const isOlive=key==='oliveyoung';
   
   ct.innerHTML=`
     <div id="${key}-ym"></div>
@@ -644,7 +645,16 @@ function renderCh(key){
       <div class="f-group"><span class="f-label">제품</span><div class="f-row"><select id="${key}-pr"><option value="all">전체</option>${prods.map(p=>`<option value="${p}">${p}</option>`).join('')}</select></div></div>
     </div>
     
-    <div class="g3" id="${key}-kpi" style="margin-bottom:14px"></div>
+    <div class="section-t" style="margin-top:8px">매출</div>
+    <div id="${key}-kpi-row1" style="margin-bottom:10px"></div>
+    
+    ${isOlive?`<div id="${key}-kpi-row2-wrap" style="display:none">
+      <div class="section-t">상품 매출</div>
+      <div id="${key}-kpi-row2" style="margin-bottom:10px"></div>
+    </div>`:''}
+    
+    <div class="section-t">광고 데이터</div>
+    <div id="${key}-kpi-row3" style="margin-bottom:14px"></div>
     
     <div class="card">
       <div class="card-h">전체 합산</div>
@@ -666,30 +676,60 @@ function renderCh(key){
     const s=ymCtrl.getSelection();updCh(s.year,s.month);
   });
   
-  let selectedMedia=null; // track selected media per channel
+  let selectedMedia=null;
   
   function updCh(year,month){
     const cat=$(`${key}-cat`).value,pr=$(`${key}-pr`).value;
     let f=fym(allR,year,month);f=fcat(f,cat);f=fprod(f,pr);
     let fs=fym(sR,year,month);
     const tm=calcM(f,fs);
-    const isOlive=key==='oliveyoung';
     const chMetrics=isOlive?GRAPH_METRICS:GRAPH_METRICS_NO_SELLOUT;
     
-    $(`${key}-kpi`).innerHTML=isOlive?`
+    // ── 1줄: 매출 ──
+    $(`${key}-kpi-row1`).innerHTML=isOlive?`<div class="g2">
       <div class="kpi"><div class="kpi-l">매출(SELL-IN)</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.sellIn)}</div></div>
       <div class="kpi"><div class="kpi-l">매출(SELL-OUT)</div><div class="kpi-v" style="color:#1a2d5a">${tm.sellOut?fw(tm.sellOut):'-'}</div></div>
-      <div class="kpi"><div class="kpi-l">광고비(VAT+)</div><div class="kpi-v" style="color:var(--official)">${fw(tm.adcostV)}</div></div>
-      <div class="kpi"><div class="kpi-l">광고매출</div><div class="kpi-v" style="color:var(--naver)">${fw(tm.purchaseVal)}</div></div>
-      <div class="kpi"><div class="kpi-l">ROAS</div><div class="kpi-v" style="color:${tm.roasP>=1?'var(--positive)':'var(--negative)'}">${fp(tm.roasP)}</div></div>
-      <div class="kpi"><div class="kpi-l">광고비 비중</div><div class="kpi-v" style="color:var(--warn)">${fp(tm.adRatio)}</div></div>
-    `:`
+    </div>`:`<div class="g2">
       <div class="kpi"><div class="kpi-l">매출</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.sellIn)}</div></div>
+    </div>`;
+    
+    // ── 2줄: 상품 매출 (올리브영 + 상품 필터 시만) ──
+    if(isOlive){
+      const row2Wrap=$(`${key}-kpi-row2-wrap`);
+      const hasProductFilter=pr!=='all';
+      if(hasProductFilter&&pR.length>0){
+        row2Wrap.style.display='block';
+        // 상품RAW에서 필터된 데이터
+        let prodFiltered=fym(pR,year,month);
+        prodFiltered=fcat(prodFiltered,cat);prodFiltered=fprod(prodFiltered,pr);
+        const pm=calcM(prodFiltered);
+        // 전체 상품 매출(E열=target), 온라인/오프라인은 매체명(B열)으로 구분
+        const onlineRows=prodFiltered.filter(r=>{const m=String(r[C.media]||'').toLowerCase();return m.includes('온라인')||m.includes('online')});
+        const offlineRows=prodFiltered.filter(r=>{const m=String(r[C.media]||'').toLowerCase();return m.includes('오프라인')||m.includes('offline')});
+        const totalProdSales=pm.reach+pm.imp+pm.click+pn(pm.adcost)+pn(pm.sellIn); // 상품 매출은 구조에 따라 조정
+        // 상품RAW도 동일 구조이므로 T열(salesT)에서 매출 가져옴
+        let totalPS=0,onlinePS=0,offlinePS=0;
+        prodFiltered.forEach(r=>totalPS+=pn(r[C.salesT])||pn(r[C.target])||0);
+        onlineRows.forEach(r=>onlinePS+=pn(r[C.salesT])||pn(r[C.target])||0);
+        offlineRows.forEach(r=>offlinePS+=pn(r[C.salesT])||pn(r[C.target])||0);
+        
+        $(`${key}-kpi-row2`).innerHTML=`<div class="g3">
+          <div class="kpi"><div class="kpi-l">전체 상품 매출</div><div class="kpi-v" style="color:#1a2d5a">${fw(totalPS)}</div></div>
+          <div class="kpi"><div class="kpi-l">온라인 상품 매출</div><div class="kpi-v" style="color:var(--blue)">${fw(onlinePS)}</div></div>
+          <div class="kpi"><div class="kpi-l">오프라인 상품 매출</div><div class="kpi-v" style="color:var(--official)">${fw(offlinePS)}</div></div>
+        </div>`;
+      }else{
+        row2Wrap.style.display='none';
+      }
+    }
+    
+    // ── 3줄: 광고 데이터 ──
+    $(`${key}-kpi-row3`).innerHTML=`<div class="g4">
       <div class="kpi"><div class="kpi-l">광고비(VAT+)</div><div class="kpi-v" style="color:var(--official)">${fw(tm.adcostV)}</div></div>
       <div class="kpi"><div class="kpi-l">광고매출</div><div class="kpi-v" style="color:var(--naver)">${fw(tm.purchaseVal)}</div></div>
       <div class="kpi"><div class="kpi-l">ROAS</div><div class="kpi-v" style="color:${tm.roasP>=1?'var(--positive)':'var(--negative)'}">${fp(tm.roasP)}</div></div>
       <div class="kpi"><div class="kpi-l">광고비 비중</div><div class="kpi-v" style="color:var(--warn)">${fp(tm.adRatio)}</div></div>
-    `;
+    </div>`;
     
     renderChannelChart(`${key}-total`,f,`${key}-chart-total`,`${key}-tgl-total`,`${key}-tbl-total`,`ch-${key}-total`,fs,chMetrics);
     
