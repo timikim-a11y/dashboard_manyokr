@@ -199,8 +199,12 @@ const CN={oliveyoung:'올리브영',naver:'네이버',official:'공식몰',etc:'
 const CC={oliveyoung:{m:'#8dd841',b:'b-ol'},naver:{m:'#1ec965',b:'b-nv'},official:{m:'#7c6cf6',b:'b-of'},etc:{m:'#e6a620',b:'b-et'}};
 const C={month:0,media:1,cat:2,period:3,target:4,product:5,reach:6,imp:7,click:8,adcost:12,cart:14,cartVal:15,purchase:16,purchaseVal:17,result:18,salesT:19,salesU:20};
 const CP={channel:19,salesAmt:20,salesCnt:21,salesQty:22};
-// 목표_raw: R열(17)=sell-in목표매출, S열(18)=sell-out목표매출
-const CG={sellInGoal:17,sellOutGoal:18};
+// 목표_raw 전체 컬럼 매핑 (B~S = index 1~18)
+// B(1)=매체명, C(2)=cat., D(3)=기간, E(4)=목표, F(5)=제품명
+// G(6)=도달, H(7)=노출, I(8)=링크클릭수, J(9)=CTR, K(10)=CPC, L(11)=CPM
+// M(12)=광고비(vat-), N(13)=광고비(vat+), O(14)=roas, P(15)=구매, Q(16)=구매전환값
+// R(17)=sell-in목표매출, S(18)=sell-out목표매출
+const CG={media:1,cat:2,period:3,target:4,product:5,reach:6,imp:7,click:8,ctr:9,cpc:10,cpm:11,adcostRaw:12,adcostVat:13,roas:14,purchase:15,purchaseVal:16,sellInGoal:17,sellOutGoal:18};
 
 const GRAPH_METRICS=[
   {k:'sellIn',l:'매출(SELL-IN)',color:'#4d8cf5',type:'bar'},
@@ -467,41 +471,55 @@ function renderKPI(){
         </tbody></table></div>`;
     });
     $('kpi-sales').innerHTML=selCh==='all'?`<div class="g3">${stH}</div>`:stH;
-    // 광고 목표 / 달성
+    // 광고 목표 / 달성 — CG 컬럼에서 각 지표별 목표 끌고옴
     let tH='';
     channels.forEach(k=>{
       const gAll=fym(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
       const aRows=fym(allR.filter(r=>r._ch===k),year,month);
       const chSales=fym(allSales.filter(r=>r._ch===k),year,month);
-      const gm=calcM(gRows),am=calcM(aRows,chSales);
+      const am=calcM(aRows,chSales);
+      // 목표_raw에서 각 지표별 합산
+      let gReach=0,gImp=0,gClick=0,gAdcostV=0,gPurchase=0,gPurchaseVal=0,gRoas=0;
+      gRows.forEach(r=>{gReach+=pn(r[CG.reach]);gImp+=pn(r[CG.imp]);gClick+=pn(r[CG.click]);gAdcostV+=pn(r[CG.adcostVat]);gPurchase+=pn(r[CG.purchase]);gPurchaseVal+=pn(r[CG.purchaseVal])});
       const ar=(a,g)=>(!g||g===0)?'-':((a/g)*100).toFixed(1)+'%';
       const pw=(a,g)=>!g?'0':Math.min(100,(a/g)*100).toFixed(1);
       const pc=(a,g)=>{if(!g)return'prog-g';const r=a/g;return r>=1?'prog-g':r>=0.7?'prog-y':'prog-r'};
       const ac=(a,g)=>{const v=parseFloat(ar(a,g));if(isNaN(v))return'var(--text-3)';return v>=100?'var(--positive)':v>=70?'var(--warn)':'var(--negative)'};
-      const goalAdcost=pn(gRows.reduce((s,r)=>s+pn(r[C.target]),0));
-      const mt=[['노출',gm.imp,am.imp,0],['클릭',gm.click,am.click,0],['광고비(VAT+)',goalAdcost*1.1,am.adcostV,1],['구매',gm.purchase,am.purchase,0],['구매전환값',gm.purchaseVal,am.purchaseVal,1]];
+      const mt=[['도달',gReach,am.reach,0],['노출',gImp,am.imp,0],['클릭',gClick,am.click,0],['광고비(VAT+)',gAdcostV,am.adcostV,1],['구매',gPurchase,am.purchase,0],['구매전환값',gPurchaseVal,am.purchaseVal,1]];
       tH+=`<div class="card"><div class="card-h"><span class="badge ${CC[k].b}">${CN[k]}</span></div>
         <table style="width:100%;font-size:11px"><thead><tr><th style="text-align:left;padding:6px 8px;font-size:9px">지표</th><th style="padding:6px 8px;font-size:9px">목표</th><th style="padding:6px 8px;font-size:9px">달성</th><th style="padding:6px 8px;font-size:9px">달성율</th></tr></thead><tbody>
         ${mt.map(([l,g,a,ic])=>`<tr><td style="text-align:left;padding:6px 8px;color:var(--text-2)">${l}</td><td style="padding:6px 8px;color:var(--text-3);font-family:var(--mono);font-size:11px">${ic?fw(g):fn(g)}</td><td style="padding:6px 8px;color:var(--text-0);font-weight:600;font-family:var(--mono);font-size:11px">${ic?fw(a):fn(a)}</td><td style="padding:6px 8px"><span style="color:${ac(a,g)};font-weight:600;font-family:var(--mono);font-size:11px">${ar(a,g)}</span><div class="prog"><div class="prog-f ${pc(a,g)}" style="width:${pw(a,g)}%"></div></div></td></tr>`).join('')}
         </tbody></table></div>`;
     });
     $('kpi-targets').innerHTML=selCh==='all'?`<div class="g3">${tH}</div>`:tH;
-    // 잔여 광고비
+    // 잔여 광고비 — CG.adcostVat에서 예산 끌고옴, 지난 달은 잔여일수 0
     let rmH='';
     channels.forEach(k=>{
       const gAll=fym(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
       const aRows=fym(allR.filter(r=>r._ch===k),year,month);
       const am=calcM(aRows);
-      const budgetGoal=gRows.reduce((s,r)=>s+pn(r[C.target]),0)*1.1;
+      const budgetGoal=gRows.reduce((s,r)=>s+pn(r[CG.adcostVat]),0);
       const spent=am.adcostV;const remain=budgetGoal-spent;
-      // 남은 일수 계산
+      // 남은 일수: 이미 지난 달은 0, 현재 월은 남은 일수, 미래 월은 전체 일수
       const today=new Date();let daysLeft=0;
-      if(month){const lastDay=new Date(year,month,0).getDate();const curDay=today.getFullYear()===year&&(today.getMonth()+1)===month?today.getDate():1;daysLeft=Math.max(0,lastDay-curDay)}
-      else{daysLeft=Math.max(0,Math.ceil((new Date(year,11,31)-today)/(864e5)))}
+      if(month){
+        const lastDay=new Date(year,month,0).getDate();
+        const isCurrentMonth=today.getFullYear()===year&&(today.getMonth()+1)===month;
+        const isPastMonth=new Date(year,month-1,lastDay)<today&&!isCurrentMonth;
+        if(isPastMonth){daysLeft=0}
+        else if(isCurrentMonth){daysLeft=Math.max(0,lastDay-today.getDate())}
+        else{daysLeft=lastDay}// 미래 월
+      }else{
+        // 전체 연도: 올해면 남은 일수, 과거면 0
+        if(year<today.getFullYear()){daysLeft=0}
+        else if(year===today.getFullYear()){daysLeft=Math.max(0,Math.ceil((new Date(year,11,31)-today)/864e5))}
+        else{daysLeft=365}
+      }
       const dailyBudget=daysLeft>0?remain/daysLeft:0;
-      rmH+=`<div class="kpi"><div class="kpi-l">${CN[k]} 잔여 광고비</div><div class="kpi-v" style="color:${remain>=0?'var(--positive)':'var(--negative)'}">${fw(remain)}</div><div class="kpi-sub">예산 ${fw(budgetGoal)} · 사용 ${fw(spent)}${daysLeft>0?` · 잔여 ${daysLeft}일 · 일예산 ${fw(dailyBudget)}`:''}</div></div>`;
+      const daysText=daysLeft>0?` · 잔여 ${daysLeft}일 · 일예산 ${fw(dailyBudget)}`:(remain<=0?' · 예산 소진':' · 기간 종료');
+      rmH+=`<div class="kpi"><div class="kpi-l">${CN[k]} 잔여 광고비</div><div class="kpi-v" style="color:${remain>=0?'var(--positive)':'var(--negative)'}">${fw(remain)}</div><div class="kpi-sub">예산 ${fw(budgetGoal)} · 사용 ${fw(spent)}${daysText}</div></div>`;
     });
     $('kpi-remain').innerHTML=selCh==='all'?`<div class="g3">${rmH}</div>`:rmH;
   }
