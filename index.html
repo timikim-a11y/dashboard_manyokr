@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>국내채널 광고성과 대시보드</title>
+<title>광고 성과 대시보드</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -173,8 +173,21 @@ tbody tr.change-rate td:first-child{color:var(--official)}
 </head>
 <body>
 
+<!-- LOGIN GATE -->
+<div class="setup-overlay" id="loginOverlay">
+<div class="setup-modal" style="max-width:400px;text-align:center">
+<h2 style="justify-content:center"><span class="dot" style="width:10px;height:10px;background:var(--olive);border-radius:50%;animation:pulse 2s infinite"></span>대시보드 로그인</h2>
+<p style="margin-bottom:16px">비밀번호를 입력하세요.</p>
+<div class="url-group" style="padding-left:0">
+<input type="password" id="loginPw" placeholder="비밀번호 입력" style="text-align:center;font-size:14px;padding:12px" onkeydown="if(event.key==='Enter')checkLogin()"/>
+</div>
+<button class="setup-btn" onclick="checkLogin()">로그인</button>
+<div class="setup-msg" id="loginMsg"></div>
+</div>
+</div>
+
 <!-- SETUP -->
-<div class="setup-overlay" id="setupOverlay">
+<div class="setup-overlay" id="setupOverlay" style="display:none">
 <div class="setup-modal">
 <h2><span class="dot" style="width:10px;height:10px;background:var(--olive);border-radius:50%;animation:pulse 2s infinite"></span>대시보드 초기 설정</h2>
 <p>각 스프레드시트에 Apps Script 웹앱을 배포한 후 URL을 입력하세요. URL은 브라우저에 저장됩니다.</p>
@@ -192,7 +205,7 @@ tbody tr.change-rate td:first-child{color:var(--official)}
 
 <!-- HEADER -->
 <div class="header">
-<div class="header-left"><span class="hdr-dot"></span><span class="header-title"> 국내채널 광고성과 대시보드</span></div>
+<div class="header-left"><span class="hdr-dot"></span><span class="header-title">광고 성과 대시보드</span></div>
 <div class="header-right">
 <span class="hdr-status" id="lastUpd">-</span>
 <button class="btn-sm" onclick="loadAllData()">↻ 새로고침</button>
@@ -222,6 +235,41 @@ tbody tr.change-rate td:first-child{color:var(--official)}
 
 <script>
 // ═══════════════════════════════════════════════════
+// ★ LOGIN — 비밀번호를 변경하려면 아래 값만 수정하세요
+// ═══════════════════════════════════════════════════
+const DASHBOARD_PASSWORD = 'admin1234';  // ← 여기에 비밀번호 설정
+
+function checkLogin(){
+  const pw=$('loginPw').value;
+  if(pw===DASHBOARD_PASSWORD){
+    $('loginOverlay').style.display='none';
+    sessionStorage.setItem('db_logged','1');
+    initDashboard();
+  }else{
+    $('loginMsg').textContent='비밀번호가 틀렸습니다.';
+    $('loginMsg').style.color='var(--negative)';
+  }
+}
+
+// 이미 로그인된 세션이면 바로 통과
+function checkSession(){
+  if(sessionStorage.getItem('db_logged')==='1'){
+    $('loginOverlay').style.display='none';
+    return true;
+  }
+  return false;
+}
+
+function initDashboard(){
+  if(loadUrls()){$setup();loadAllData()}
+}
+
+// DOM 로드 후 세션 체크
+document.addEventListener('DOMContentLoaded',()=>{
+  if(checkSession()){initDashboard()}
+});
+
+// ═══════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════
 const CHS=['oliveyoung','naver','official','etc'];
@@ -230,8 +278,8 @@ const CC={oliveyoung:{m:'#8dd841',b:'b-ol'},naver:{m:'#1ec965',b:'b-nv'},officia
 const C={month:0,media:1,cat:2,period:3,target:4,product:5,reach:6,imp:7,click:8,adcost:12,cart:14,cartVal:15,purchase:16,purchaseVal:17,result:18,salesT:19,salesU:20};
 // salesT = T열(index 19): 올리브영=SELL-IN 매출, 나머지=매출
 // salesU = U열(index 20): 올리브영=SELL-OUT 매출 (나머지는 없음)
-// 상품_raw: T열(19)=채널(온라인/오프라인), U열(20)=판매금액, V열(21)=판매건수, W열(22)=판매수량
-const CP={channel:19,salesAmt:20,salesCnt:21,salesQty:22};
+// 상품_raw: T열(20)=채널(온라인/오프라인), U열(21)=판매금액, V열(22)=판매건수, W열(23)=판매수량
+const CP={channel:20,salesAmt:21,salesCnt:22,salesQty:23};
 
 const GRAPH_METRICS=[
   {k:'sellIn',l:'매출(SELL-IN)',color:'#4d8cf5',type:'bar'},
@@ -281,7 +329,6 @@ function saveSetup(){
   urls=u;localStorage.setItem('db_urls2',JSON.stringify(u));$('setupOverlay').style.display='none';loadAllData();
 }
 function showSetup(){CHS.forEach(k=>{const e=$(`url-${k}`);if(e&&urls[k])e.value=urls[k]});$('setupOverlay').style.display='flex';$('setupMsg').textContent=''}
-if(loadUrls()){$setup();loadAllData()}
 function $setup(){$('setupOverlay').style.display='none';CHS.forEach(k=>{const e=$(`url-${k}`);if(e&&urls[k])e.value=urls[k]})}
 
 // ═══════════════════════════════════════════════════
