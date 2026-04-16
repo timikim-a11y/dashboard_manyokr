@@ -273,6 +273,15 @@ function fmedia(rows,v){if(!v||v==='all')return rows;return rows.filter(r=>Strin
 function fcat(rows,v){if(!v||v==='all')return rows;return rows.filter(r=>String(r[C.cat]||'').trim()===v)}
 function fprod(rows,v){if(!v||v==='all')return rows;return rows.filter(r=>String(r[C.product]||'').trim()===v)}
 function uq(rows,c){const s=new Set();rows.forEach(r=>{const v=String(r[c]||'').trim();if(v&&v!=='undefined'&&v!=='null')s.add(v)});return[...s].sort()}
+// 목표_raw 전용 필터: 기간이 "1월","2월" 등 텍스트 형식
+function fymGoal(rows,year,month){
+  if(!month)return rows; // 월 미선택(전체)이면 전부
+  const monthStr=month+'월';
+  return rows.filter(r=>{
+    const p=String(r[C.period]||'').trim();
+    return p===monthStr||p===String(month)||p===month+'월';
+  });
+}
 function dateRange(rows){let mn=null,mx=null;rows.forEach(r=>{const d=pd(r[C.period]);if(d){if(!mn||d<mn)mn=d;if(!mx||d>mx)mx=d}});return{min:mn,max:mx}}
 function dc(id){if(charts[id]){charts[id].destroy();delete charts[id]}}
 function getYears(rows){const s=new Set();rows.forEach(r=>{const d=pd(r[C.period]);if(d)s.add(d.getFullYear())});return[...s].sort()}
@@ -453,7 +462,7 @@ function renderKPI(){
     let stH='';
     channels.forEach(k=>{
       // 목표_raw에서 필터: 공통=전체, 나머지=해당 cat만
-      const gAll=fym(allG.filter(r=>r._ch===k),year,month);
+      const gAll=fymGoal(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
       const chSales=fym(allSales.filter(r=>r._ch===k),year,month);
       const aRows=fym(allR.filter(r=>r._ch===k),year,month);
@@ -474,7 +483,7 @@ function renderKPI(){
     // 광고 목표 / 달성 — CG 컬럼에서 각 지표별 목표 끌고옴
     let tH='';
     channels.forEach(k=>{
-      const gAll=fym(allG.filter(r=>r._ch===k),year,month);
+      const gAll=fymGoal(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
       const aRows=fym(allR.filter(r=>r._ch===k),year,month);
       const chSales=fym(allSales.filter(r=>r._ch===k),year,month);
@@ -496,7 +505,7 @@ function renderKPI(){
     // 잔여 광고비 — CG.adcostVat에서 예산 끌고옴, 지난 달은 잔여일수 0
     let rmH='';
     channels.forEach(k=>{
-      const gAll=fym(allG.filter(r=>r._ch===k),year,month);
+      const gAll=fymGoal(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
       const aRows=fym(allR.filter(r=>r._ch===k),year,month);
       const am=calcM(aRows);
