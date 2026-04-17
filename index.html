@@ -185,7 +185,7 @@ tbody tr.change-rate td:first-child{color:var(--official)}
 // ═══════════════════════════════════════════════════
 // ★ LOGIN
 // ═══════════════════════════════════════════════════
-const DASHBOARD_PASSWORD = 'AKSUmanyo_2604';
+const DASHBOARD_PASSWORD = 'admin1234';
 function checkLogin(){const pw=$('loginPw').value;if(pw===DASHBOARD_PASSWORD){$('loginOverlay').style.display='none';sessionStorage.setItem('db_logged','1');initDashboard()}else{$('loginMsg').textContent='비밀번호가 틀렸습니다.';$('loginMsg').style.color='var(--negative)'}}
 function checkSession(){if(sessionStorage.getItem('db_logged')==='1'){$('loginOverlay').style.display='none';return true}return false}
 function initDashboard(){if(loadUrls()){$setup();loadAllData()}}
@@ -458,14 +458,17 @@ function renderKPI(){
   }
   function upd(year,month){
     const channels=selCh==='all'?tCh:[selCh];
+    const catFilter=selCat==='공통'?null:selCat; // null=전체(공통), 값=해당 cat
+    
     // 매출 목표 / 달성
     let stH='';
     channels.forEach(k=>{
-      // 목표_raw에서 필터: 공통=전체, 나머지=해당 cat만
       const gAll=fymGoal(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
-      const chSales=fym(allSales.filter(r=>r._ch===k),year,month);
-      const aRows=fym(allR.filter(r=>r._ch===k),year,month);
+      let chSales=fym(allSales.filter(r=>r._ch===k),year,month);
+      let aRows=fym(allR.filter(r=>r._ch===k),year,month);
+      // CAT 필터 적용 (공통=전체, 나머지=해당 cat만)
+      if(catFilter){aRows=fcat(aRows,catFilter);chSales=fcat(chSales,catFilter)}
       const am=calcM(aRows,chSales);
       let siGoal=0,soGoal=0;gRows.forEach(r=>{siGoal+=pn(r[CG.sellInGoal]);soGoal+=pn(r[CG.sellOutGoal])});
       const isOlive=k==='oliveyoung';
@@ -485,8 +488,9 @@ function renderKPI(){
     channels.forEach(k=>{
       const gAll=fymGoal(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
-      const aRows=fym(allR.filter(r=>r._ch===k),year,month);
-      const chSales=fym(allSales.filter(r=>r._ch===k),year,month);
+      let aRows=fym(allR.filter(r=>r._ch===k),year,month);
+      let chSales=fym(allSales.filter(r=>r._ch===k),year,month);
+      if(catFilter){aRows=fcat(aRows,catFilter);chSales=fcat(chSales,catFilter)}
       const am=calcM(aRows,chSales);
       // 목표_raw에서 각 지표별 합산
       let gReach=0,gImp=0,gClick=0,gAdcostV=0,gPurchase=0,gPurchaseVal=0,gRoas=0;
@@ -507,7 +511,8 @@ function renderKPI(){
     channels.forEach(k=>{
       const gAll=fymGoal(allG.filter(r=>r._ch===k),year,month);
       const gRows=selCat==='공통'?gAll.filter(r=>String(r[C.cat]||'').trim()==='공통'):gAll.filter(r=>String(r[C.cat]||'').trim()===selCat);
-      const aRows=fym(allR.filter(r=>r._ch===k),year,month);
+      let aRows=fym(allR.filter(r=>r._ch===k),year,month);
+      if(catFilter)aRows=fcat(aRows,catFilter);
       const am=calcM(aRows);
       const budgetGoal=gRows.reduce((s,r)=>s+pn(r[CG.adcostVat]),0);
       const spent=am.adcostV;const remain=budgetGoal-spent;
