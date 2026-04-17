@@ -185,7 +185,7 @@ tbody tr.change-rate td:first-child{color:var(--official)}
 // ═══════════════════════════════════════════════════
 // ★ LOGIN
 // ═══════════════════════════════════════════════════
-const DASHBOARD_PASSWORD = 'admin1234';
+const DASHBOARD_PASSWORD = 'AKSUmanyo_2604';
 function checkLogin(){const pw=$('loginPw').value;if(pw===DASHBOARD_PASSWORD){$('loginOverlay').style.display='none';sessionStorage.setItem('db_logged','1');initDashboard()}else{$('loginMsg').textContent='비밀번호가 틀렸습니다.';$('loginMsg').style.color='var(--negative)'}}
 function checkSession(){if(sessionStorage.getItem('db_logged')==='1'){$('loginOverlay').style.display='none';return true}return false}
 function initDashboard(){if(loadUrls()){$setup();loadAllData()}}
