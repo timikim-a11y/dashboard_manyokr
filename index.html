@@ -361,14 +361,48 @@ function renderCh(key){
   function updCh(year,month){
     const cat=$(`${key}-cat`).value,pr=isOff?'all':($(`${key}-pr`)?.value||'all');
     let f=fym(allR,year,month);f=fcat(f,cat);f=fprod(f,pr);let fs=fym(sR,year,month);
-    const tm=isOlive?calcM(f,fs):calcMNonOlive(f,fs);const chGM=isOlive?GRAPH_METRICS:GRAPH_METRICS_NO_SELLOUT;
+    const tm=isOlive?calcM(f,fs):calcMNonOlive(f,fs);
+    // 올리브영+제품필터 시 상품별 매출 메트릭으로 전환
+    const hasProdFilter=isOlive&&cat!=='all'&&pR.length>0;
+    let chGM;
+    if(hasProdFilter){
+      // 상품_raw 기반 매출 그래프
+      chGM=[
+        {k:'prodSales',l:'상품 매출(전체)',color:'#1a2d5a',type:'bar'},
+        {k:'prodOnline',l:'상품 매출(온라인)',color:'#4d8cf5',type:'bar'},
+        {k:'prodOffline',l:'상품 매출(오프라인)',color:'#7c6cf6',type:'bar'},
+        {k:'adcostV',l:'광고비',color:'#a855f7',type:'bar'},
+        {k:'purchaseVal',l:'광고매출',color:'#1ec965',type:'bar'},
+        {k:'roasP',l:'광고 ROAS',color:'#e6a620',type:'line',yAxis:'y1',pct:true}
+      ];
+      // 상품 데이터를 calcM 결과에 추가하기 위해 커스텀 chart 렌더
+      const byDate={};f.forEach(r=>{const d=pd(r[C.period]);const dk=d?ds(d):'?';if(!byDate[dk])byDate[dk]=[];byDate[dk].push(r)});
+      let pf=fym(pR,year,month);pf=fcat(pf,cat);if(pr!=='all')pf=fprod(pf,pr);
+      const prodByDate={};pf.forEach(r=>{const d=pd(r[C.period]);const dk=d?ds(d):'?';if(!prodByDate[dk])prodByDate[dk]=[];prodByDate[dk].push(r)});
+      const dks=Object.keys(byDate).sort();
+      const dataByMetric={};chGM.forEach(gm=>dataByMetric[gm.k]=[]);
+      dks.forEach(dk=>{
+        const am=calcM(byDate[dk]);
+        const pd2=prodByDate[dk]||[];
+        let ps=0,pon=0,poff=0;
+        pd2.forEach(r=>{const amt=pn(r[CP.salesAmt]);ps+=amt;if(String(r[CP.channel]||'').includes('온라인'))pon+=amt;if(String(r[CP.channel]||'').includes('오프라인'))poff+=amt});
+        dataByMetric.prodSales.push(ps);dataByMetric.prodOnline.push(pon);dataByMetric.prodOffline.push(poff);
+        dataByMetric.adcostV.push(am.adcostV);dataByMetric.purchaseVal.push(am.purchaseVal);dataByMetric.roasP.push(am.roasP);
+      });
+      renderMixedChart(`${key}-chart`,`${key}-tgl`,dks,dataByMetric,`ch-${key}`,chGM);
+      // Table은 기존 방식
+      const tRows=dks.map(dk=>({date:dk,...calcM(byDate[dk])}));const tot=calcM(f,fs);
+      if(tRows.length>0)setTimeout(()=>buildTbl([{date:'합계',...tot},...tRows],`${key}-tbl`),0);
+    }else{
+      chGM=isOlive?GRAPH_METRICS:GRAPH_METRICS_NO_SELLOUT;
+      renderChannelChart(`${key}-total`,f,`${key}-chart`,`${key}-tgl`,`${key}-tbl`,`ch-${key}`,fs,chGM);
+    }
     // R1: 매출
     $(`${key}-r1`).innerHTML=isOlive?`<div class="g2"><div class="kpi"><div class="kpi-l">매출(SELL-IN)</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.sellIn)}</div></div><div class="kpi"><div class="kpi-l">매출(SELL-OUT)</div><div class="kpi-v" style="color:#1a2d5a">${tm.sellOut?fw(tm.sellOut):'-'}</div></div></div>`:`<div class="g2"><div class="kpi"><div class="kpi-l">매출</div><div class="kpi-v" style="color:var(--blue)">${fw(tm.sellIn)}</div></div></div>`;
     // R2: 상품 (올리브영 CAT필터시)
     if(isOlive){const w=$(`${key}-r2w`);if(cat!=='all'&&pR.length>0){w.style.display='block';let pf=fym(pR,year,month);pf=fcat(pf,cat);if(pr!=='all')pf=fprod(pf,pr);const on=pf.filter(r=>String(r[CP.channel]||'').includes('온라인'));const off=pf.filter(r=>String(r[CP.channel]||'').includes('오프라인'));let t=0,o=0,f2=0;pf.forEach(r=>t+=pn(r[CP.salesAmt]));on.forEach(r=>o+=pn(r[CP.salesAmt]));off.forEach(r=>f2+=pn(r[CP.salesAmt]));$(`${key}-r2`).innerHTML=`<div class="g3"><div class="kpi"><div class="kpi-l">전체</div><div class="kpi-v" style="color:#1a2d5a">${fw(t)}</div></div><div class="kpi"><div class="kpi-l">온라인</div><div class="kpi-v" style="color:var(--blue)">${fw(o)}</div></div><div class="kpi"><div class="kpi-l">오프라인</div><div class="kpi-v" style="color:var(--official)">${fw(f2)}</div></div></div>`}else{w.style.display='none'}}
     // R3: 광고
     $(`${key}-r3`).innerHTML=`<div class="g4"><div class="kpi"><div class="kpi-l">광고비(VAT+)</div><div class="kpi-v" style="color:var(--official)">${fw(tm.adcostV)}</div></div><div class="kpi"><div class="kpi-l">광고매출</div><div class="kpi-v" style="color:var(--naver)">${fw(tm.purchaseVal)}</div></div><div class="kpi"><div class="kpi-l">ROAS</div><div class="kpi-v" style="color:${tm.roasP>=1?'var(--positive)':'var(--negative)'}">${fp(tm.roasP)}</div></div><div class="kpi"><div class="kpi-l">광고비 비중</div><div class="kpi-v" style="color:var(--warn)">${fp(tm.adRatio)}</div></div></div>`;
-    renderChannelChart(`${key}-total`,f,`${key}-chart`,`${key}-tgl`,`${key}-tbl`,`ch-${key}`,fs,chGM);
     // Media buttons
     const mg={};f.forEach(r=>{const m=String(r[C.media]||'기타').trim();if(!mg[m])mg[m]=[];mg[m].push(r)});
     const ml=Object.keys(mg).sort();if(selMedia&&!ml.includes(selMedia))selMedia=null;if(!selMedia&&ml.length>0)selMedia=ml[0];
@@ -394,60 +428,127 @@ function renderOYRank(){
   const dateRow=raw.find(r=>!pn(r[1])&&(r[2]||r[3]||r[4]));
   const rankRows=raw.filter(r=>{const v=pn(r[1]);return v>=1&&v<=100});
   const dates=[];if(dateRow){for(let i=2;i<50;i+=2){const d=dateRow[i];if(d)dates.push({col:i,date:String(d).trim()})}}
-  // 월별 필터용
-  const months=new Set();dates.forEach(d=>{const m=d.date.match(/(\d+)월|(\d+)\//);if(m)months.add(m[1]||m[2])});
-  // 브랜드 텍스트에서 숫자 제거
-  const cleanBrand=(s)=>String(s||'').replace(/\d+/g,'').trim();
+  // 브랜드 텍스트에서 숫자와 - 제거
+  const cleanBrand=(s)=>String(s||'').replace(/[\d\-]/g,'').trim();
+  // 월별 추출
+  const monthSet=new Set();dates.forEach(d=>{const m=d.date.match(/(\d+)\./);if(m)monthSet.add(m[1])});
+  const monthList=[...monthSet].sort((a,b)=>+a-+b);
 
   ct.innerHTML=`<div class="ym-bar" id="oyr-type-btns"></div>
-    <div class="filters"><div class="f-group"><span class="f-label">날짜</span><div class="f-row"><select id="oyr-date"><option value="all">전체</option>${dates.map((d,i)=>`<option value="${i}">${d.date}</option>`).join('')}</select></div></div></div>
-    <input type="text" class="rank-search" id="oyr-search" placeholder="브랜드명 검색..."/>
+    <div class="ym-bar" id="oyr-month-btns"></div>
+    <input type="text" class="rank-search" id="oyr-search" placeholder="브랜드명 검색 (마녀공장과 순위 비교 그래프 표시)"/>
+    <div id="oyr-chart-area" style="margin-bottom:14px"></div>
     <div id="oyr-result"></div><div id="oyr-table"></div>`;
-  let selType='all';
+  
+  let selType='all',selMonth='all';
   function renderTypeBtns(){
     $('oyr-type-btns').innerHTML='<span class="ym-label">채널</span>'+['all','online','offline'].map(t=>`<div class="ym-btn ${t===selType?'active':''}" data-t="${t}">${t==='all'?'전체':t==='online'?'온라인':'오프라인'}</div>`).join('');
     $('oyr-type-btns').querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>{selType=b.dataset.t;renderTypeBtns();updRank()}));
   }
+  function renderMonthBtns(){
+    $('oyr-month-btns').innerHTML='<span class="ym-label">월</span><div class="ym-btn '+(selMonth==='all'?'active':'')+'" data-mo="all">전체</div>'+monthList.map(m=>`<div class="ym-btn ${m===selMonth?'active':''}" data-mo="${m}">${m}월</div>`).join('');
+    $('oyr-month-btns').querySelectorAll('[data-mo]').forEach(b=>b.addEventListener('click',()=>{selMonth=b.dataset.mo;renderMonthBtns();updRank()}));
+  }
+  
+  function getFilteredCols(){
+    let cols=dates.map(d=>({date:d.date,on:d.col,off:d.col+1}));
+    if(selMonth!=='all')cols=cols.filter(c=>c.date.includes(selMonth+'.'));
+    return cols;
+  }
+  
+  // 특정 브랜드의 일자별 순위 가져오기
+  function getBrandDailyRanks(brandName,cols,type){
+    const result=[];
+    cols.forEach(c=>{
+      let found=null;
+      rankRows.forEach(r=>{
+        const rank=pn(r[1]);
+        if(type==='all'||type==='online'){const b=cleanBrand(r[c.on]);if(b===brandName&&(!found||rank<found.rank))found={date:c.date,rank,type:'온'}}
+        if(type==='all'||type==='offline'){const b=cleanBrand(r[c.off]);if(b===brandName&&(!found||rank<found.rank))found={date:c.date,rank,type:'오'}}
+      });
+      if(type==='all'){
+        // 온+오프 평균
+        let onRank=null,offRank=null;
+        rankRows.forEach(r=>{const rk=pn(r[1]);if(cleanBrand(r[c.on])===brandName)onRank=rk;if(cleanBrand(r[c.off])===brandName)offRank=rk});
+        const avg=onRank&&offRank?(onRank+offRank)/2:(onRank||offRank||null);
+        result.push({date:c.date,rank:avg});
+      }else{
+        result.push({date:c.date,rank:found?found.rank:null});
+      }
+    });
+    return result;
+  }
+  
   function updRank(){
-    const dateIdx=$('oyr-date').value;const search=$('oyr-search').value.trim().toLowerCase();
-    let cols=[];
-    if(dateIdx==='all')dates.forEach(d=>cols.push({date:d.date,on:d.col,off:d.col+1}));
-    else{const d=dates[parseInt(dateIdx)];if(d)cols=[{date:d.date,on:d.col,off:d.col+1}]}
-    // "전체" 모드: 각 날짜별로 온/오프 브랜드를 합쳐서 평균 순위 계산
+    const search=$('oyr-search').value.trim().toLowerCase();
+    const cols=getFilteredCols();
+    const typeKey=selType==='online'?'on':selType==='offline'?'off':'both';
+    
+    // 비교 차트: 검색 브랜드 vs 마녀공장
+    if(search){
+      const searchClean=search;
+      // 검색 브랜드 찾기
+      let matchedBrand=null;
+      rankRows.forEach(r=>{cols.forEach(c=>{
+        ['on','off'].forEach(t=>{const b=cleanBrand(r[c[t]]);if(b.toLowerCase().includes(searchClean)&&!matchedBrand)matchedBrand=b})
+      })});
+      
+      if(matchedBrand){
+        const mwRanks=getBrandDailyRanks('마녀공장',cols,selType);
+        const searchRanks=getBrandDailyRanks(matchedBrand,cols,selType);
+        const labels=cols.map(c=>c.date);
+        const mwAvg=mwRanks.filter(r=>r.rank).reduce((s,r)=>s+r.rank,0)/(mwRanks.filter(r=>r.rank).length||1);
+        const srAvg=searchRanks.filter(r=>r.rank).reduce((s,r)=>s+r.rank,0)/(searchRanks.filter(r=>r.rank).length||1);
+        
+        $('oyr-result').innerHTML=`<div class="rank-avg">🔍 "${matchedBrand}" 평균: ${srAvg.toFixed(1)}위 / 마녀공장 평균: ${mwAvg.toFixed(1)}위</div>`;
+        $('oyr-chart-area').innerHTML=`<div class="card"><div class="card-h">순위 비교: ${matchedBrand} vs 마녀공장</div><div style="height:250px"><canvas id="oyr-cmp-chart"></canvas></div></div>`;
+        dc('oyr-cmp-chart');const ctx=$('oyr-cmp-chart')?.getContext('2d');
+        if(ctx){
+          charts['oyr-cmp-chart']=new Chart(ctx,{type:'line',data:{labels,datasets:[
+            {label:matchedBrand,data:searchRanks.map(r=>r.rank),borderColor:'#4d8cf5',backgroundColor:'rgba(77,140,245,.1)',tension:.3,pointRadius:4,borderWidth:2},
+            {label:'마녀공장',data:mwRanks.map(r=>r.rank),borderColor:'#c83250',backgroundColor:'rgba(200,50,80,.1)',tension:.3,pointRadius:4,borderWidth:2}
+          ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#666660',font:{size:10}}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw?c.raw+'위':'-'}`}}},scales:{x:{ticks:{color:'#999990',font:{size:9}},grid:{display:false}},y:{reverse:true,min:1,ticks:{color:'#999990',font:{size:9},stepSize:10},grid:{color:'rgba(0,0,0,.06)'}}}}});
+        }
+      }else{$('oyr-result').innerHTML=`<div class="no-data">"${search}" 검색 결과 없음</div>`;$('oyr-chart-area').innerHTML=''}
+    }else{$('oyr-result').innerHTML='';$('oyr-chart-area').innerHTML=''}
+    
+    // 테이블
     if(selType==='all'){
-      // 브랜드별 순위 수집
-      const brandRanks={};
+      // 전체 모드: 일자별 온/오프 평균 순위
+      // 브랜드별로 각 일자의 평균 순위 계산
+      const brandData={};
       rankRows.forEach(r=>{const rank=pn(r[1]);cols.forEach(c=>{
         const onB=cleanBrand(r[c.on]);const offB=cleanBrand(r[c.off]);
-        if(onB){if(!brandRanks[onB])brandRanks[onB]=[];brandRanks[onB].push({date:c.date,type:'온라인',rank})}
-        if(offB){if(!brandRanks[offB])brandRanks[offB]=[];brandRanks[offB].push({date:c.date,type:'오프라인',rank})}
+        [onB,offB].forEach(b=>{if(!b)return;if(!brandData[b])brandData[b]={};
+          if(!brandData[b][c.date])brandData[b][c.date]=[];brandData[b][c.date].push(rank)});
       })});
-      // 평균 순위로 정렬
-      const brandList=Object.entries(brandRanks).map(([name,entries])=>({name,avg:entries.reduce((s,e)=>s+e.rank,0)/entries.length,count:entries.length,entries})).sort((a,b)=>a.avg-b.avg);
-      // 검색
+      // 일자별 평균 + 전체 평균
+      const brandList=Object.entries(brandData).map(([name,byDate])=>{
+        const dailyAvgs={};let totalSum=0,totalCnt=0;
+        cols.forEach(c=>{const ranks=byDate[c.date];if(ranks){const avg=ranks.reduce((s,v)=>s+v,0)/ranks.length;dailyAvgs[c.date]=avg;totalSum+=avg;totalCnt++}else{dailyAvgs[c.date]=null}});
+        return{name,dailyAvgs,totalAvg:totalCnt>0?totalSum/totalCnt:999};
+      }).sort((a,b)=>a.totalAvg-b.totalAvg);
       const filtered=search?brandList.filter(b=>b.name.toLowerCase().includes(search)):brandList;
-      if(search&&filtered.length>0){const top=filtered[0];$('oyr-result').innerHTML=`<div class="rank-avg">🔍 "${search}" → 평균 순위: ${top.avg.toFixed(1)}위 (${top.count}회 등장)</div>`}else $('oyr-result').innerHTML='';
-      let h='<div class="tbl-wrap"><table><thead><tr><th>평균순위</th><th style="text-align:left">브랜드</th><th>등장횟수</th></tr></thead><tbody>';
-      filtered.slice(0,100).forEach(b=>{const isMW=b.name.includes('마녀공장');const rc=b.avg<=10?'var(--positive)':b.avg<=30?'var(--warn)':'var(--text-2)';
-        h+=`<tr class="${isMW?'rank-mw':''}"><td style="font-family:var(--mono);font-weight:700;color:${rc}">${b.avg.toFixed(1)}</td><td style="text-align:left;${isMW?'font-weight:800;color:#c83250':''}${search&&b.name.toLowerCase().includes(search)?' class="rank-highlight"':''}">${b.name}</td><td style="font-family:var(--mono)">${b.count}</td></tr>`});
+      
+      let h='<div class="tbl-wrap"><table><thead><tr><th>평균</th><th style="text-align:left">브랜드</th>';
+      cols.forEach(c=>h+=`<th>${c.date}</th>`);h+='</tr></thead><tbody>';
+      filtered.slice(0,100).forEach(b=>{const isMW=b.name.includes('마녀공장');const rc=b.totalAvg<=10?'var(--positive)':b.totalAvg<=30?'var(--warn)':'var(--text-2)';
+        h+=`<tr class="${isMW?'rank-mw':''}"><td style="font-family:var(--mono);font-weight:700;color:${rc}">${b.totalAvg<999?b.totalAvg.toFixed(1):'-'}</td><td style="text-align:left;${isMW?'font-weight:800;color:#c83250':''}">${b.name}</td>`;
+        cols.forEach(c=>{const v=b.dailyAvgs[c.date];h+=`<td style="font-family:var(--mono);${v&&v<=10?'color:var(--positive);font-weight:600':v&&v<=30?'color:var(--warn)':''}">${v?v.toFixed(1):'-'}</td>`});
+        h+='</tr>'});
       h+='</tbody></table></div>';$('oyr-table').innerHTML=h;
     }else{
-      // 온라인 or 오프라인 개별 모드
-      const colIdx=selType==='online'?'on':'off';const label=selType==='online'?'온라인':'오프라인';
-      if(search){
-        let found=[];rankRows.forEach(r=>{const rank=pn(r[1]);cols.forEach(c=>{const brand=cleanBrand(r[c[colIdx]]);if(brand.toLowerCase().includes(search))found.push({date:c.date,rank,brand})})});
-        if(found.length>0){const avg=(found.reduce((s,f)=>s+f.rank,0)/found.length).toFixed(1);$('oyr-result').innerHTML=`<div class="rank-avg">🔍 "${search}" ${label} → 평균 순위: ${avg}위 (${found.length}건)</div>`}else $('oyr-result').innerHTML=`<div class="no-data">"${search}" 검색 결과 없음</div>`
-      }else $('oyr-result').innerHTML='';
-      let h='<div class="tbl-wrap"><table><thead><tr><th>순위</th>';cols.forEach(c=>h+=`<th style="text-align:left">${c.date} ${label}</th>`);h+='</tr></thead><tbody>';
+      const colKey=selType==='online'?'on':'off';const label=selType==='online'?'온라인':'오프라인';
+      let h='<div class="tbl-wrap"><table><thead><tr><th>순위</th>';cols.forEach(c=>h+=`<th style="text-align:left">${c.date}</th>`);h+='</tr></thead><tbody>';
       rankRows.sort((a,b)=>pn(a[1])-pn(b[1])).forEach(r=>{const rank=pn(r[1]);const rc=rank<=10?'var(--positive)':rank<=30?'var(--warn)':'var(--text-2)';
         h+=`<tr><td style="font-family:var(--mono);font-weight:700;color:${rc}">${rank}</td>`;
-        cols.forEach(c=>{const brand=cleanBrand(r[c[colIdx]]);const isMW=brand.includes('마녀공장');const hl=search&&brand.toLowerCase().includes(search)?'rank-highlight':'';
+        cols.forEach(c=>{const brand=cleanBrand(r[c[colKey]]);const isMW=brand.includes('마녀공장');const hl=search&&brand.toLowerCase().includes(search)?'rank-highlight':'';
           h+=`<td style="text-align:left;${isMW?'font-weight:800;color:#c83250':''}" class="${hl} ${isMW?'rank-mw':''}">${brand||'-'}</td>`});
         h+='</tr>'});
       h+='</tbody></table></div>';$('oyr-table').innerHTML=h;
     }
   }
-  renderTypeBtns();$('oyr-date').addEventListener('change',updRank);$('oyr-search').addEventListener('input',updRank);updRank();
+  renderTypeBtns();renderMonthBtns();$('oyr-search').addEventListener('input',updRank);updRank();
 }
 
 // ═══════════════ COMPARE TAB ═══════════════
