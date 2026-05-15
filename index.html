@@ -347,10 +347,12 @@ function renderSummary(){
     chartByDate(f,fs,'s-chart','s-tgl',GM_ALL);
     const byDate={};f.forEach(r=>{const dk=r[0];if(!bd[dk])byDate[dk]=[];byDate[dk].push(r)});
     const sByDate={};fs.forEach(r=>{const dk=r[0];if(!sByDate[dk])sByDate[dk]=[];sByDate[dk].push(r)});
-    const tRows=Object.keys(byDate).sort().map(dk=>{const m=sumAd(byDate[dk]);const sr=sByDate[dk]||[];m.sellIn=sr.reduce((s,r)=>s+pn(r[SI.sellIn]),0);m.sellOut=sr.reduce((s,r)=>s+pn(r[SI.sellOut]),0);return{date:dk,...m}});
+    const bd2={};f.forEach(r=>{const dk=r[0];if(!bd2[dk])bd2[dk]=[];bd2[dk].push(r)});
+    const sd2={};fs.forEach(r=>{const dk=r[0];if(!sd2[dk])sd2[dk]=[];sd2[dk].push(r)});
+    const tRows=Object.keys(bd2).sort().map(dk=>{const m=sumAd(bd2[dk]);const sr=sd2[dk]||[];m.sellIn=sr.reduce((s,r)=>s+pn(r[SI.sellIn]),0);m.sellOut=sr.reduce((s,r)=>s+pn(r[SI.sellOut]),0);return{date:dk,...m}});
     if(tRows.length)setTimeout(()=>buildTbl([{date:'합계',...tm},...tRows],'s-tbl'),0);
+    const chMap={'oliveyoung':'올리브영','naver':'네이버','official':'공식몰','etc':null};
     CHS.forEach(k=>{
-      const chMap={'oliveyoung':'올리브영','naver':'네이버','official':'공식몰','etc':null};
       const cn=chMap[k];
       const chR=cn?f.filter(r=>String(r[AI.ch]||'').includes(cn)):f;
       const gm=k==='oliveyoung'?GM_ALL:GM_NOSO;
@@ -454,7 +456,7 @@ function renderOYRank(){
         if(ctx){charts['oyr-cmp']=new Chart(ctx,{type:'line',data:{labels,datasets:[
           {label:mb,data:dates.map(d=>srT[d]||null),borderColor:'#4d8cf5',backgroundColor:'rgba(77,140,245,.1)',tension:.3,pointRadius:3,borderWidth:2,spanGaps:false},
           {label:'마녀공장',data:dates.map(d=>mwT[d]||null),borderColor:'#c83250',backgroundColor:'rgba(200,50,80,.1)',tension:.3,pointRadius:3,borderWidth:2,spanGaps:false}
-        ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scores:{x:{ticks:{font:{size:9}},grid:{display:false}},y:{reverse:true,min:1,ticks:{stepSize:10}}}}})}
+        ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},scales:{x:{ticks:{font:{size:9}},grid:{display:false}},y:{reverse:true,min:1,ticks:{stepSize:10}}}}})}
       }else{G('oyr-chart-area').innerHTML=`<div class="no-data">"${search}" 검색 결과 없음</div>`}
     }else{G('oyr-chart-area').innerHTML=''}
     let h=`<div style="font-size:11px;color:var(--text-3);margin-bottom:6px">기준일: ${latest}</div><div class="tbl-wrap"><table><thead><tr><th style="text-align:left">순위</th><th style="text-align:left">브랜드</th></tr></thead><tbody>`;
